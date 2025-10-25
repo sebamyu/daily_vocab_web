@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { words } from '@/data/words';
 import { Word, Difficulty } from '@/types';
 import { scoreSentence } from '@/lib/scoring';
+import { workerData } from 'worker_threads';
 
 export default function Home() {
     const [currentWord, setCurrentWord] = useState<Word | null>(null);
@@ -12,9 +13,15 @@ export default function Home() {
     const [feedbackColor, setFeedbackColor] = useState<string>('text-gray-700');
     const [isSubmitted, setIsSubmitted] = useState<boolean>(false);
 
-    const getRandomWord = useCallback(() => {
-        const randomIndex = Math.floor(Math.random() * words.length);
-        setCurrentWord(words[randomIndex]);
+// page.tsx (ใน dashboard)
+    const getRandomWord = useCallback(async () => {
+        // const randomIndex = Math.floor(Math.random() * words.length);
+        // const word = words[randomIndex]; // TODO fetch api
+
+        const response = await fetch("/api/word");
+        const result = await response.json();
+        
+        setCurrentWord(result.data);
         setSentence('');
         setScore(0);
         setFeedbackColor('text-gray-700');
