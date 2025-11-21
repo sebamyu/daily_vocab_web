@@ -31,5 +31,5 @@ export interface HistoryItem {
   word: string;
   user_sentence: string;
   score: number;
-  practiced_at: string;
+  practiced_at: string; 
 }

@@ -1,154 +1,145 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { ValidateSentenceRequest, ValidateSentenceResponse, WordResponse } from '@/types/api';
+import { SummaryResponse, HistoryItem, DifficultyLevel } from '@/types/api';
+import Link from 'next/link';
 
 const API_BASE_URL = 'http://localhost:8000/api'; 
 
-const getScoreColor = (score: number): string => {
-  if (score >= 80) return 'bg-success text-white';
-  if (score >= 60) return 'bg-warning text-gray-800';
-  return 'bg-danger text-white';
+const StatCard: React.FC<{ title: string; value: string | number; color: string }> = ({ title, value, color }) => (
+    <div className={`p-4 rounded-lg shadow-md text-center ${color} text-white`}>
+        <div className="text-3xl font-bold">{value}</div>
+        <div className="text-sm">{title}</div>
+    </div>
+);
+
+const LevelBar: React.FC<{ level: DifficultyLevel; count: number; total: number }> = ({ level, count, total }) => {
+    const percentage = total > 0 ? (count / total) * 100 : 0;
+    let colorClass = 'bg-gray-400';
+    if (level === 'Beginner') colorClass = 'bg-success';
+    else if (level === 'Intermediate') colorClass = 'bg-warning';
+    else if (level === 'Advanced') colorClass = 'bg-danger';
+
+    return (
+        <div className="mb-2">
+            <div className="flex justify-between text-sm font-medium text-gray-700">
+                <span>{level} ({count})</span>
+                <span>{percentage.toFixed(1)}%</span>
+            </div>
+            <div className="w-full bg-gray-200 rounded-full h-2.5">
+                <div 
+                    className={`h-2.5 rounded-full ${colorClass}`} 
+                    style={{ width: `${percentage}%` }}
+                />
+            </div>
+        </div>
+    );
 };
 
-export default function WordChallengePage() {
-  const [currentWord, setCurrentWord] = useState<WordResponse | null>(null);
-  const [sentence, setSentence] = useState('');
-  const [result, setResult] = useState<ValidateSentenceResponse | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
-  const fetchNewWord = async () => {
-    setLoading(true);
-    setSentence('');
-    setResult(null);
-    setError(null);
-    setCurrentWord(null); 
-    try {
-        const response = await fetch(`${API_BASE_URL}/word`);
-        if (!response.ok) throw new Error('Failed to fetch word. Check Backend API status.');
-        const data: WordResponse = await response.json();
-        setCurrentWord(data);
-    } catch (err: any) {
-        setError(err.message);
-    } finally {
-        setLoading(false);
-    }
-  };
+export default function DashboardPage() {
+    const [summary, setSummary] = useState<SummaryResponse | null>(null);
+    const [history, setHistory] = useState<HistoryItem[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    fetchNewWord();
-  }, []); 
+    useEffect(() => {
+        const fetchData = async () => {
+            setLoading(true);
+            setError(null);
+            try {
+                const summaryRes = await fetch(`${API_BASE_URL}/summary`);
+                if (!summaryRes.ok) throw new Error('Failed to fetch summary.');
+                const summaryData: SummaryResponse = await summaryRes.json();
+                setSummary(summaryData);
 
-  const handleSentenceChange = (event: React.ChangeEvent<HTMLTextAreaElement>) => {
-    setSentence(event.target.value);
-    if (result) setResult(null);
-  };
+                const historyRes = await fetch(`${API_BASE_URL}/history?limit=5`);
+                if (!historyRes.ok) throw new Error('Failed to fetch history.');
+                const historyData: HistoryItem[] = await historyRes.json();
+                setHistory(historyData);
 
-  const handleSubmitSentence = async (event: React.FormEvent) => {
-    event.preventDefault();
-    if (!currentWord || sentence.trim() === '') return;
+            } catch (err: any) {
+                setError(`Error fetching data: ${err.message}`);
+            } finally {
+                setLoading(false);
+            }
+        };
 
-    setLoading(true);
-    setResult(null);
-    setError(null);
+        fetchData();
+    }, []);
 
-    const submission: ValidateSentenceRequest = {
-        word_id: currentWord.id,
-        sentence: sentence.trim(),
-    };
+    const totalPractices = summary?.total_practices || 0;
+    const levelKeys: DifficultyLevel[] = ['Beginner', 'Intermediate', 'Advanced'];
 
-    try {
-        const response = await fetch(`${API_BASE_URL}/validate-sentence`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(submission), 
-        });
-
-        if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(errorData.detail || 'API request failed.');
-        }
-
-        const data: ValidateSentenceResponse = await response.json();
-        setResult(data); 
-
-    } catch (err: any) {
-        console.error("API Call Error:", err);
-        setError(`Error submitting: ${err.message}`);
-    } finally {
-        setLoading(false);
-    }
-  };
-
-
-  return (
-    <div className="max-w-4xl mx-auto p-6 bg-white shadow-xl rounded-lg mt-8">
-      <h1 className="text-3xl font-bold text-primary mb-6">🎯 Word Challenge</h1>
-      
-      {loading && !currentWord && <p className="text-center text-info">Loading new word...</p>}
-      {error && <p className="text-danger text-center mb-4">{error}</p>}
-      
-      {currentWord && (
-        <>
-          {}
-          <div className={`p-4 rounded-lg mb-6 border-l-4 border-info bg-gray-50`}>
-            <h2 className="text-2xl font-semibold text-gray-800">{currentWord.word}</h2>
-            <p className="text-sm text-gray-500 mb-2">Level: <span className="font-medium text-secondary">{currentWord.difficulty_level}</span></p>
-            <p className="text-gray-600 italic">"{currentWord.definition}"</p>
-          </div>
-
-          {}
-          <form onSubmit={handleSubmitSentence} className="space-y-4">
-            <label htmlFor="sentence-input" className="block text-lg font-medium text-gray-700">
-              Write a sentence using **"{currentWord.word}"**
-            </label>
-            <textarea
-              id="sentence-input"
-              value={sentence}
-              onChange={handleSentenceChange}
-              rows={5}
-              className="w-full p-3 border border-gray-300 rounded-md shadow-sm focus:ring-primary focus:border-primary transition duration-150 ease-in-out resize-none"
-              placeholder="Start typing your sentence here..."
-              disabled={loading}
-            />
-            <div className="flex space-x-4">
-                <button
-                  type="submit"
-                  disabled={loading || sentence.trim() === ''}
-                  className="px-6 py-2 bg-primary text-white font-semibold rounded-lg shadow-md hover:bg-secondary disabled:bg-gray-400 transition duration-150"
-                >
-                  {loading && !result ? 'Validating...' : 'Submit Sentence'}
-                </button>
-                <button
-                    type="button"
-                    onClick={fetchNewWord}
-                    disabled={loading}
-                    className="px-6 py-2 border border-gray-300 text-gray-700 font-semibold rounded-lg shadow-md hover:bg-gray-50 disabled:bg-gray-200 transition duration-150"
-                >
-                    New Word (Skip)
-                </button>
+    if (loading) return <div className="max-w-6xl mx-auto p-6 mt-10 text-center">Loading Dashboard...</div>;
+    if (error) return <div className="max-w-6xl mx-auto p-6 mt-10 text-center text-danger">Error: {error}</div>;
+    
+    return (
+        <div className="max-w-6xl mx-auto p-6 mt-4">
+            <h1 className="text-4xl font-extrabold text-gray-900 mb-8">📊 Dashboard</h1>
+            
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
+                <StatCard 
+                    title="Total Practices" 
+                    value={totalPractices} 
+                    color="bg-info" 
+                />
+                <StatCard 
+                    title="Average Score" 
+                    value={summary?.average_score?.toFixed(1) || 'N/A'} 
+                    color="bg-primary" 
+                />
+                <StatCard 
+                    title="Words Practiced" 
+                    value={summary?.total_words_practiced || 0} 
+                    color="bg-accent" 
+                />
             </div>
-          </form>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                
+                <div className="bg-white p-6 rounded-lg shadow-lg">
+                    <h2 className="text-xl font-semibold mb-4 text-gray-800">Practice Distribution by Level</h2>
+                    {summary?.level_distribution && totalPractices > 0 ? (
+                        levelKeys.map(level => (
+                            <LevelBar 
+                                key={level}
+                                level={level}
+                                count={summary.level_distribution[level]}
+                                total={totalPractices}
+                            />
+                        ))
+                    ) : (
+                        <p className="text-gray-500">No practice data available.</p>
+                    )}
+                </div>
 
-          {}
-          {result && (
-            <div className={`mt-8 p-5 rounded-lg shadow-lg transition duration-300 ${getScoreColor(result.score)}`}>
-              <h3 className="text-xl font-bold mb-3">✅ Validation Result</h3>
-              <p className="text-sm"><strong>Score:</strong> <span className="text-2xl font-extrabold">{result.score.toFixed(1)}/100</span></p>
-              <p className="mt-2"><strong>Level Assessed:</strong> {result.level}</p>
-              <p><strong>Suggestion:</strong> {result.suggestion}</p>
-              <p className="mt-3 border-t pt-2 border-opacity-30">
-                  <span className="font-semibold">Corrected Sentence:</span> {result.corrected_sentence}
-              </p>
+                <div className="bg-white p-6 rounded-lg shadow-lg">
+                    <h2 className="text-xl font-semibold mb-4 text-gray-800">Recent History (Last 5)</h2>
+                    {history.length > 0 ? (
+                        <ul className="space-y-3">
+                            {history.map((item) => (
+                                <li key={item.id} className="border-b pb-3 last:border-b-0">
+                                    <div className="flex justify-between items-start">
+                                        <div className="font-semibold text-primary">{item.word}</div>
+                                        <div className={`text-sm px-2 py-0.5 rounded ${item.score >= 80 ? 'bg-success/20 text-success' : item.score >= 60 ? 'bg-warning/20 text-warning' : 'bg-danger/20 text-danger'}`}>
+                                            Score: {item.score.toFixed(1)}
+                                        </div>
+                                    </div>
+                                    <p className="text-sm text-gray-600 truncate">{item.user_sentence}</p>
+                                    <p className="text-xs text-gray-400 mt-1">
+                                        {new Date(item.practiced_at).toLocaleString()}
+                                    </p>
+                                </li>
+                            ))}
+                        </ul>
+                    ) : (
+                        <p className="text-gray-500">No recent practice history.</p>
+                    )}
+                </div>
             </div>
-          )}
-        </>
-      )}
-    </div>
-  );
+        </div>
+    );
 }
 
 // "use client";
